@@ -7,6 +7,7 @@ import useStake from "@/hooks/useStake";
 import Link from "next/link";
 import { useState } from "react";
 import { useAccount } from "wagmi";
+import { formatEther } from "viem";
 
 
 export default function Dashboard() {
@@ -73,6 +74,7 @@ const minLockDuration = hooksData?.minLockDuration;
       setIsEmergencyWithdrawing(false);
     }
   };
+  const Format = typeof totalStaked === "bigint" ? formatEther(totalStaked) : "Loading...";
 
  return (
   <div className="p-6 max-w-4xl mx-auto">
@@ -96,7 +98,7 @@ const minLockDuration = hooksData?.minLockDuration;
       <div className="p-4 border border-gray-300 rounded">
         <p className="text-sm text-gray-600">Total Staked</p>
         <p className="text-xl font-semibold">
-          {totalStaked !== undefined && totalStaked !== null ? totalStaked.toLocaleString() : 'Loading...'}
+          {typeof totalStaked === "bigint" ? formatEther(totalStaked) : 'Loading...'}
         </p>
       </div>
       <div className="p-4 border border-gray-300 rounded">
@@ -145,7 +147,7 @@ const minLockDuration = hooksData?.minLockDuration;
             Pending Rewards:{" "}
             <span className="font-semibold text-green-600">
               {pendingRewards !== undefined && pendingRewards !== null
-                ? `${pendingRewards.toLocaleString()} TOKENS`
+                ? `${formatEther(pendingRewards as bigint)} TOKENS`
                 : 'Loading...'
               }
             </span>
