@@ -1,9 +1,11 @@
 "use client";
 
+import { useGetHooks } from "@/hooks/useGetHooks";
 import useWithdraw from "@/hooks/useWithdraw";
 import Link from "next/link";
 import { useState } from "react";
 import { useAccount } from "wagmi";
+
 
 export default function Positions() {
   const [isWithdrawing, setIsWithdrawing] = useState(false);
@@ -11,6 +13,10 @@ export default function Positions() {
 
   const withdrawTokens = useWithdraw();
   const { address } = useAccount(); // Fix: destructure address properly
+const hooksData = useGetHooks();
+const userDetails = hooksData?.userDetails;
+const minLockDuration = hooksData?.minLockDuration;
+
 
   const handleWithdraw = async () => { // Fix: remove parameter, get from state
     if (!withdrawAmount || parseFloat(withdrawAmount) <= 0) {
