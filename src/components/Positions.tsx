@@ -14,8 +14,16 @@ export default function Positions() {
   const { address } = useAccount();
   const hooksData = useGetHooks();
 
+  // Define the expected shape for userDetails
+  type UserDetails = {
+    stakedAmount?: bigint;
+    // add other properties if needed
+  };
+
   // Extract data from hooks
-  const userDetails = hooksData?.userDetails;
+  const userDetails: UserDetails | undefined = hooksData?.userDetails as
+    | UserDetails
+    | undefined;
   const pendingRewards = hooksData?.pendingRewards;
   const timeUntilUnlock = hooksData?.timeUntilUnlock;
   const isLoading = hooksData?.isLoading;
@@ -56,9 +64,9 @@ export default function Positions() {
     return !timeLeft || Number(timeLeft) <= 0;
   };
 
-  if (isLoading) {
-    return <div className="p-6">Loading...</div>;
-  }
+  // if (isLoading) {
+  //   return <div className="p-6">Loading...</div>;
+  // }
 
   const stakedAmount = userDetails?.stakedAmount;
   const hasStake = stakedAmount && Number(stakedAmount) > 0;
@@ -87,7 +95,8 @@ export default function Positions() {
                   {formatTokenAmount(stakedAmount)} TOKENS
                 </td>
                 <td className="p-3 border-b">
-                  {formatTokenAmount(pendingRewards)} TOKENS
+                  {formatTokenAmount(pendingRewards as bigint | undefined)}{" "}
+                  TOKENS
                 </td>
                 <td className="p-3 border-b">
                   <span
@@ -144,7 +153,7 @@ export default function Positions() {
         </table>
       </div>
 
-      {/* <div>
+      <div>
         <h2 className="text-lg font-semibold mb-4">All Stakes</h2>
         <table className="w-full border border-gray-300">
           <thead>
@@ -167,7 +176,7 @@ export default function Positions() {
             </tr>
           </tbody>
         </table>
-      </div> */}
+      </div>
     </div>
   );
 }
