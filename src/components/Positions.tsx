@@ -6,19 +6,21 @@ import Link from "next/link";
 import { useState } from "react";
 import { useAccount } from "wagmi";
 
-
 export default function Positions() {
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [withdrawAmount, setWithdrawAmount] = useState("");
 
   const withdrawTokens = useWithdraw();
-  const { address } = useAccount(); // Fix: destructure address properly
-const hooksData = useGetHooks();
-const userDetails = hooksData?.userDetails;
-const minLockDuration = hooksData?.minLockDuration;
+  const { address } = useAccount();
+  const hooksData = useGetHooks();
 
+  // Extract data from hooks
+  const userDetails = hooksData?.userDetails;
+  const pendingRewards = hooksData?.pendingRewards;
+  const timeUntilUnlock = hooksData?.timeUntilUnlock;
+  const isLoading = hooksData?.isLoading;
 
-  const handleWithdraw = async () => { // Fix: remove parameter, get from state
+  const handleWithdraw = async () => {
     if (!withdrawAmount || parseFloat(withdrawAmount) <= 0) {
       alert("Please enter a valid amount");
       return;
@@ -26,8 +28,8 @@ const minLockDuration = hooksData?.minLockDuration;
 
     setIsWithdrawing(true);
     try {
-      await withdrawTokens(parseFloat(withdrawAmount)); // Fix: pass the amount from state
-      setWithdrawAmount(""); // Clear input on success
+      await withdrawTokens(parseFloat(withdrawAmount));
+      setWithdrawAmount("");
     } catch (error) {
       console.error("Withdrawal failed:", error);
     } finally {
@@ -35,16 +37,36 @@ const minLockDuration = hooksData?.minLockDuration;
     }
   };
 
+  // Helper functions to format data
+  const formatTokenAmount = (amount: bigint | undefined) => {
+    if (!amount) return "0";
+    return (Number(amount) / 10 ** 18).toLocaleString();
+  };
+
+  const formatTimeUntilUnlock = (seconds: bigint | undefined) => {
+    if (!seconds || Number(seconds) <= 0) return "Unlocked";
+
+    const totalSeconds = Number(seconds);
+    const days = Math.floor(totalSeconds / 86400);
+    const hours = Math.floor((totalSeconds % 86400) / 3600);
+    return `${days}d ${hours}h left`;
+  };
+
+  const isUnlocked = (timeLeft: bigint | undefined) => {
+    return !timeLeft || Number(timeLeft) <= 0;
+  };
+
+  if (isLoading) {
+    return <div className="p-6">Loading...</div>;
+  }
+
+  const stakedAmount = userDetails?.stakedAmount;
+  const hasStake = stakedAmount && Number(stakedAmount) > 0;
+
   return (
     <div className="p-6 max-w-6xl mx-auto">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Stake Positions</h1>
-        <Link
-          href="/"
-          className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-        >
-          Back to Dashboard
-        </Link>
       </div>
 
       <div className="mb-8">
@@ -59,57 +81,70 @@ const minLockDuration = hooksData?.minLockDuration;
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td className="p-3 border-b">10,000 TOKENS</td>
-              <td className="p-3 border-b">234.56 TOKENS</td>
-              <td className="p-3 border-b">
-                <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded text-sm">
-                  Locked
-                </span>
-              </td>
-              <td className="p-3 border-b">
-                <button
-                  disabled
-                  className="px-3 py-1 bg-gray-300 text-gray-600 rounded cursor-not-allowed"
-                >
-                  5d 12h left
-                </button>
-              </td>
-            </tr>
-            <tr>
-              <td className="p-3 border-b">5,000 TOKENS</td>
-              <td className="p-3 border-b">145.23 TOKENS</td>
-              <td className="p-3 border-b">
-                <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-sm">
-                  Unlocked
-                </span>
-              </td>
-              <td className="p-3 border-b">
-                <div className="space-y-2">
-                  <input
-                    type="number"
-                    value={withdrawAmount}
-                    onChange={(e) => setWithdrawAmount(e.target.value)}
-                    placeholder="Amount to withdraw"
-                    className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-green-500"
-                    disabled={isWithdrawing}
-                    max="5000" // Max available amount
-                  />
-                  <button
-                    onClick={handleWithdraw}
-                    disabled={!address || isWithdrawing || !withdrawAmount}
-                    className="w-full px-3 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
+            {hasStake ? (
+              <tr>
+                <td className="p-3 border-b">
+                  {formatTokenAmount(stakedAmount)} TOKENS
+                </td>
+                <td className="p-3 border-b">
+                  {formatTokenAmount(pendingRewards)} TOKENS
+                </td>
+                <td className="p-3 border-b">
+                  <span
+                    className={`px-2 py-1 rounded text-sm ${
+                      isUnlocked(timeUntilUnlock)
+                        ? "bg-green-100 text-green-800"
+                        : "bg-yellow-100 text-yellow-800"
+                    }`}
                   >
-                    {isWithdrawing ? "Withdrawing..." : "Withdraw"}
-                  </button>
-                </div>
-              </td>
-            </tr>
+                    {isUnlocked(timeUntilUnlock) ? "Unlocked" : "Locked"}
+                  </span>
+                </td>
+                <td className="p-3 border-b">
+                  {isUnlocked(timeUntilUnlock) ? (
+                    <div className="space-y-2">
+                      <input
+                        type="number"
+                        value={withdrawAmount}
+                        onChange={(e) => setWithdrawAmount(e.target.value)}
+                        placeholder="Amount to withdraw"
+                        className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-green-500"
+                        disabled={isWithdrawing}
+                        max={formatTokenAmount(stakedAmount)}
+                      />
+                      <button
+                        onClick={handleWithdraw}
+                        disabled={!address || isWithdrawing || !withdrawAmount}
+                        className="w-full px-3 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                      >
+                        {isWithdrawing ? "Withdrawing..." : "Withdraw"}
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      disabled
+                      className="px-3 py-1 bg-gray-300 text-gray-600 rounded cursor-not-allowed"
+                    >
+                      {formatTimeUntilUnlock(timeUntilUnlock)}
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ) : (
+              <tr>
+                <td
+                  colSpan={4}
+                  className="p-3 border-b text-center text-gray-500"
+                >
+                  No active stakes found
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
 
-      <div>
+      {/* <div>
         <h2 className="text-lg font-semibold mb-4">All Stakes</h2>
         <table className="w-full border border-gray-300">
           <thead>
@@ -121,26 +156,18 @@ const minLockDuration = hooksData?.minLockDuration;
           </thead>
           <tbody>
             <tr>
-              <td className="p-3 border-b">0x1234...5678</td>
-              <td className="p-3 border-b">50,000 TOKENS</td>
-              <td className="p-3 border-b">
-                <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-sm">
-                  Active
-                </span>
-              </td>
-            </tr>
-            <tr>
-              <td className="p-3 border-b">0xabcd...efgh</td>
-              <td className="p-3 border-b">25,000 TOKENS</td>
-              <td className="p-3 border-b">
-                <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded text-sm">
-                  Locked
-                </span>
+              <td
+                className="p-3 border-b"
+                colSpan={3}
+                className="text-center text-gray-500"
+              >
+                All stakes data not available - need to implement protocol-wide
+                stakes query
               </td>
             </tr>
           </tbody>
         </table>
-      </div>
+      </div> */}
     </div>
   );
 }

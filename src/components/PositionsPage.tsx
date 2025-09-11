@@ -1,5 +1,5 @@
-import Positions from "@/components/Dashboard";
+import Dashboard from "@/components/Dashboard";
 
 export default function PositionsPage() {
-  return <Positions />;
+  return <Dashboard />;
 }

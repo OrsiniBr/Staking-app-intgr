@@ -1,5 +1,5 @@
-import { contractAbi, tokenAbi } from "../config/abi";
-import React, { useCallback } from "react";
+import { contractAbi} from "../config/abi";
+import { useCallback } from "react";
 import { toast } from "sonner";
 import { useAccount, usePublicClient, useWalletClient, useWriteContract } from "wagmi";
 
@@ -50,7 +50,6 @@ const useEmergencyWithdraw = () => {
                 address: contractAddress as `0x${string}`,
                 abi: contractAbi,
                 functionName: "emergencyWithdraw",
-                args: [], // No arguments needed
             });
 
             console.log("Emergency withdraw txHash: ", emergencyHash);
