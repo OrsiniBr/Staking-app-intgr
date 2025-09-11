@@ -101,16 +101,18 @@ export default function Positions() {
                 <td className="p-3 border-b">
                   <span
                     className={`px-2 py-1 rounded text-sm ${
-                      isUnlocked(timeUntilUnlock)
+                      isUnlocked(timeUntilUnlock as bigint | undefined)
                         ? "bg-green-100 text-green-800"
                         : "bg-yellow-100 text-yellow-800"
                     }`}
                   >
-                    {isUnlocked(timeUntilUnlock) ? "Unlocked" : "Locked"}
+                    {isUnlocked(timeUntilUnlock as bigint | undefined)
+                      ? "Unlocked"
+                      : "Locked"}
                   </span>
                 </td>
                 <td className="p-3 border-b">
-                  {isUnlocked(timeUntilUnlock) ? (
+                  {isUnlocked(timeUntilUnlock as bigint | undefined) ? (
                     <div className="space-y-2">
                       <input
                         type="number"
@@ -134,7 +136,9 @@ export default function Positions() {
                       disabled
                       className="px-3 py-1 bg-gray-300 text-gray-600 rounded cursor-not-allowed"
                     >
-                      {formatTimeUntilUnlock(timeUntilUnlock)}
+                      {formatTimeUntilUnlock(
+                        timeUntilUnlock as bigint | undefined
+                      )}
                     </button>
                   )}
                 </td>
@@ -166,9 +170,8 @@ export default function Positions() {
           <tbody>
             <tr>
               <td
-                className="p-3 border-b"
+                className="p-3 border-b text-center text-gray-500"
                 colSpan={3}
-                className="text-center text-gray-500"
               >
                 All stakes data not available - need to implement protocol-wide
                 stakes query

@@ -48,7 +48,7 @@ export const useGetHooks = () => {
     onLogs: (logs) => {
       // Check if any event involves current user
       const userInvolved = logs.some(
-        (log) => log.args.user?.toLowerCase() === address?.toLowerCase()
+        (log) => (log as any).args?.user?.toLowerCase() === address?.toLowerCase()
       );
       if (userInvolved || logs.length > 0) {
         // Refresh if user involved OR for protocol stats
@@ -64,7 +64,7 @@ export const useGetHooks = () => {
     eventName: "Withdrawn",
     onLogs: (logs) => {
       const userInvolved = logs.some(
-        (log) => log.args.user?.toLowerCase() === address?.toLowerCase()
+        (log) => (log as any).args?.user?.toLowerCase() === address?.toLowerCase()
       );
       if (userInvolved || logs.length > 0) {
         triggerRefresh();
@@ -79,7 +79,7 @@ export const useGetHooks = () => {
     eventName: "RewardsClaimed",
     onLogs: (logs) => {
       const userInvolved = logs.some(
-        (log) => log.args.user?.toLowerCase() === address?.toLowerCase()
+        (log) => (log as any).args?.user?.toLowerCase() === address?.toLowerCase()
       );
       if (userInvolved) {
         // Only refresh if current user claimed
@@ -95,7 +95,7 @@ export const useGetHooks = () => {
     eventName: "EmergencyWithdrawn",
     onLogs: (logs) => {
       const userInvolved = logs.some(
-        (log) => log.args.user?.toLowerCase() === address?.toLowerCase()
+        (log) => (log as any).args?.user?.toLowerCase() === address?.toLowerCase()
       );
       if (userInvolved || logs.length > 0) {
         triggerRefresh();
@@ -188,8 +188,7 @@ export const useGetHooks = () => {
       refetchInterval: false,
       staleTime: 1000 * 60 * 5, // Consider data stale after 5 minutes
     },
-    // This key changes when events occur, triggering a refetch
-    queryKey: ["staking-data", address, contractAddress, refreshTrigger],
+    // Removed queryKey as it's not a supported property for useReadContracts
   });
 
   // Optional: Add a manual refresh for pending rewards (since they grow over time)
