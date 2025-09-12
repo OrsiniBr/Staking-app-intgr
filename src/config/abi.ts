@@ -795,7 +795,7 @@ export const contractAbi = [
 	}
 ]
 
-export const tokenAbi = [
+export const tokenAbi =[
   {
     inputs: [
       {
@@ -1120,4 +1120,4 @@ export const tokenAbi = [
     stateMutability: "nonpayable",
     type: "function",
   },
-];
+] ;

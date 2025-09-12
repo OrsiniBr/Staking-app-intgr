@@ -9,40 +9,44 @@ import { useState } from "react";
 import { useAccount } from "wagmi";
 import { formatEther } from "viem";
 import { useApprove } from "@/hooks/useApprove";
-// import { useApprove } from "@/hooks/useApprove";
 
-export default function Dashboard() {
+import React from "react";
+
+export default function Dashboard(): React.JSX.Element {
   const { address } = useAccount();
-  const [stakeAmount, setStakeAmount] = useState("");
-  const [isApproving, setIsApproving] = useState(false);
-  const [isStaking, setIsStaking] = useState(false);
+  const [stakeAmount, setStakeAmount] = useState<string>("");
+  const [isApproving, setIsApproving] = useState<boolean>(false);
+  const [isStaking, setIsStaking] = useState<boolean>(false);
+  const [isClaiming, setIsClaiming] = useState<boolean>(false);
+  const [isEmergencyWithdrawing, setIsEmergencyWithdrawing] =
+    useState<boolean>(false);
+
+  // Hooks
   const claimRewards = useClaimRewards();
-  const [isClaiming, setIsClaiming] = useState(false);
   const emergencyWithdraw = useEmergencyWithdraw();
-  const [isEmergencyWithdrawing, setIsEmergencyWithdrawing] = useState(false);
   const hooksData = useGetHooks();
   const stakeTokens = useStake();
   const approveTokens = useApprove();
 
-  type UserInfo = {
-    stakedAmount?: number;
-    // add other properties if needed
-  };
+  // Extract data with proper types
+  const {
+    userInfo,
+    pendingRewards,
+    timeUntilUnlock,
+    userDetails,
+    totalStaked,
+    currentRewardRate,
+    initialApr,
+    minLockDuration,
+    isLoading,
+    error,
+  } = hooksData;
 
-  const userInfo: UserInfo | undefined = hooksData?.userInfo as
-    | UserInfo
-    | undefined;
-  const pendingRewards = hooksData?.pendingRewards;
-  const timeUntilUnlock = hooksData?.timeUntilUnlock;
-  const userDetails = hooksData?.userDetails;
-  const totalStaked = hooksData?.totalStaked;
-  const currentRewardRate = hooksData?.currentRewardRate;
-  const initialApr = hooksData?.initialApr;
-  const minLockDuration = hooksData?.minLockDuration;
-
-  const handleApprove = async () => {
+  // Handler functions
+  const handleApprove = async (): Promise<void> => {
     if (!stakeAmount || parseFloat(stakeAmount) <= 0) {
       alert("What do you think you're approving");
+      return;
     }
     setIsApproving(true);
     try {
@@ -54,7 +58,7 @@ export default function Dashboard() {
     }
   };
 
-  const handleStake = async () => {
+  const handleStake = async (): Promise<void> => {
     if (!stakeAmount || parseFloat(stakeAmount) <= 0) {
       alert("Please enter a valid amount");
       return;
@@ -63,7 +67,7 @@ export default function Dashboard() {
     setIsStaking(true);
     try {
       await stakeTokens(parseFloat(stakeAmount));
-      setStakeAmount(""); // Clear input on success
+      setStakeAmount("");
     } catch (error) {
       console.error("Staking failed:", error);
     } finally {
@@ -71,7 +75,7 @@ export default function Dashboard() {
     }
   };
 
-  const handleClaim = async () => {
+  const handleClaim = async (): Promise<void> => {
     setIsClaiming(true);
     try {
       await claimRewards();
@@ -82,7 +86,7 @@ export default function Dashboard() {
     }
   };
 
-  const handleEmergencyWithdraw = async () => {
+  const handleEmergencyWithdraw = async (): Promise<void> => {
     setIsEmergencyWithdrawing(true);
     try {
       await emergencyWithdraw();
@@ -92,8 +96,54 @@ export default function Dashboard() {
       setIsEmergencyWithdrawing(false);
     }
   };
-  const Format =
-    typeof totalStaked === "bigint" ? formatEther(totalStaked) : "Loading...";
+
+  // Format helper functions
+  const formatTokenAmount = (amount: bigint | null): string => {
+    if (!amount) return "0";
+    return parseFloat(formatEther(amount)).toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 6,
+    });
+  };
+
+  const formatTimeUntilUnlock = (seconds: bigint | null): string => {
+    if (!seconds || Number(seconds) <= 0) return "Unlocked";
+
+    const totalSeconds = Number(seconds);
+    const days = Math.floor(totalSeconds / 86400);
+    const hours = Math.floor((totalSeconds % 86400) / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+
+    if (days > 0) return `${days}d ${hours}h`;
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    return `${minutes}m`;
+  };
+
+  const formatAPR = (apr: bigint | null): string => {
+    if (!apr) return "Loading...";
+    return `${Number(apr) / 100}%`;
+  };
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="p-6 max-w-4xl mx-auto">
+        <div className="text-center">Loading dashboard...</div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="p-6 max-w-4xl mx-auto">
+        <div className="text-center text-red-600">Error: {error}</div>
+      </div>
+    );
+  }
+
+  const hasStake = userInfo?.stakedAmount && Number(userInfo.stakedAmount) > 0;
+  const hasPendingRewards = pendingRewards && Number(pendingRewards) > 0;
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
@@ -111,24 +161,18 @@ export default function Dashboard() {
         <div className="p-4 border border-gray-300 rounded">
           <p className="text-sm text-gray-600">Current APR</p>
           <p className="text-xl font-semibold">
-            {initialApr !== undefined ? `${initialApr}%` : "Loading..."}
+            {formatAPR(currentRewardRate)}
           </p>
         </div>
         <div className="p-4 border border-gray-300 rounded">
           <p className="text-sm text-gray-600">Total Staked</p>
           <p className="text-xl font-semibold">
-            {typeof totalStaked === "bigint"
-              ? formatEther(totalStaked)
-              : "Loading..."}
+            {formatTokenAmount(totalStaked)} TOKENS
           </p>
         </div>
         <div className="p-4 border border-gray-300 rounded">
-          <p className="text-sm text-gray-600">Reward Rate</p>
-          <p className="text-xl font-semibold">
-            {currentRewardRate !== undefined
-              ? `${currentRewardRate}%/day`
-              : "Loading..."}
-          </p>
+          <p className="text-sm text-gray-600">Initial APR</p>
+          <p className="text-xl font-semibold">{formatAPR(initialApr)}</p>
         </div>
       </div>
 
@@ -139,15 +183,17 @@ export default function Dashboard() {
             <input
               type="number"
               value={stakeAmount}
-              onChange={(e) => setStakeAmount(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setStakeAmount(e.target.value)
+              }
               placeholder="Enter amount"
               className="w-full p-3 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-              disabled={isStaking || !address}
+              disabled={isStaking || isApproving || !address}
             />
 
             <button
               onClick={handleApprove}
-              disabled={!address || isStaking || !stakeAmount}
+              disabled={!address || isApproving || isStaking || !stakeAmount}
               className="w-full py-3 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
             >
               {isApproving ? "Approving..." : "Approve"}
@@ -155,8 +201,8 @@ export default function Dashboard() {
 
             <button
               onClick={handleStake}
-              disabled={!address || isStaking || !stakeAmount}
-              className="w-full py-3 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
+              disabled={!address || isStaking || isApproving || !stakeAmount}
+              className="w-full py-3 bg-green-500 text-white rounded hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
             >
               {isStaking ? "Staking..." : "Stake"}
             </button>
@@ -169,48 +215,39 @@ export default function Dashboard() {
             <p>
               Staked:{" "}
               <span className="font-semibold">
-                {userInfo?.stakedAmount !== undefined
-                  ? `${userInfo.stakedAmount.toLocaleString()} TOKENS`
-                  : "Loading..."}
+                {hasStake
+                  ? `${formatTokenAmount(userInfo.stakedAmount)} TOKENS`
+                  : "No active stakes"}
               </span>
             </p>
             <p>
               Pending Rewards:{" "}
               <span className="font-semibold text-green-600">
-                {pendingRewards !== undefined && pendingRewards !== null
-                  ? `${formatEther(pendingRewards as bigint)} TOKENS`
-                  : "Loading..."}
+                {formatTokenAmount(pendingRewards)} TOKENS
               </span>
             </p>
             <p>
               Unlock in:{" "}
               <span className="font-semibold">
-                {timeUntilUnlock !== undefined && timeUntilUnlock !== null
-                  ? String(timeUntilUnlock)
-                  : "Loading..."}
+                {formatTimeUntilUnlock(timeUntilUnlock)}
               </span>
             </p>
             <div className="space-y-2 pt-2">
               <button
                 onClick={handleClaim}
-                disabled={
-                  !address ||
-                  isClaiming ||
-                  !pendingRewards ||
-                  pendingRewards === 0
-                }
+                disabled={!address || isClaiming || !hasPendingRewards}
                 className="w-full py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
               >
                 {isClaiming ? "Claiming..." : "Claim Rewards"}
               </button>
               <button
                 onClick={handleEmergencyWithdraw}
-                disabled={!address}
+                disabled={!address || isEmergencyWithdrawing || !hasStake}
                 className="w-full py-2 bg-red-500 text-white rounded hover:bg-red-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
               >
                 {isEmergencyWithdrawing
                   ? "Processing..."
-                  : "Emergency Withdraw"}
+                  : "Emergency Withdraw (50% penalty)"}
               </button>
             </div>
           </div>
