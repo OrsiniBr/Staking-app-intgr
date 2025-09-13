@@ -2,15 +2,26 @@
 
 import useClaimRewards from "@/hooks/useClaimRewards";
 import useEmergencyWithdraw from "@/hooks/useEmergencyWithdraw";
-import { useGetHooks } from "@/hooks/useGetHooks";
 import { useStake } from "@/hooks/useStake";
+import { useApprove } from "@/hooks/useApprove";
 import Link from "next/link";
 import { useState } from "react";
 import { useAccount } from "wagmi";
 import { formatEther } from "viem";
-import { useApprove } from "@/hooks/useApprove";
+import { BigNumber } from "ethers";
+
+
+// NEW: Apollo imports
+import {
+  useUserStakes,
+  useContractStats,
+  useUserPositionsDetailed,
+} from "@/hooks/useStakingData";
 
 import React from "react";
+
+const STAKING_CONTRACT_ADDRESS =
+  process.env.NEXT_PUBLIC_STAKING_CONTRACT_ADDRESS; // Replace with your contract address
 
 export default function Dashboard(): React.JSX.Element {
   const { address } = useAccount();
@@ -21,28 +32,30 @@ export default function Dashboard(): React.JSX.Element {
   const [isEmergencyWithdrawing, setIsEmergencyWithdrawing] =
     useState<boolean>(false);
 
-  // Hooks
+  // EXISTING: Keep all your write functions
   const claimRewards = useClaimRewards();
   const emergencyWithdraw = useEmergencyWithdraw();
-  const hooksData = useGetHooks();
   const stakeTokens = useStake();
   const approveTokens = useApprove();
 
-  // Extract data with proper types
+  // NEW: Apollo data fetching (read-only)
   const {
-    userInfo,
-    pendingRewards,
-    timeUntilUnlock,
-    userDetails,
-    totalStaked,
-    currentRewardRate,
-    initialApr,
-    minLockDuration,
-    isLoading,
-    error,
-  } = hooksData;
+    user: apolloUser,
+    stakePositions,
+    loading: apolloUserLoading,
+  } = useUserStakes(address || "");
 
-  // Handler functions
+  const { contract, loading: contractLoading } = useContractStats(
+    process.env.NEXT_PUBLIC_STAKING_CONTRACT_ADDRESS || ""
+  );
+
+  const {
+    user: detailedUser,
+    positions,
+    loading: positionsLoading,
+  } = useUserPositionsDetailed(address || "");
+
+  // EXISTING: Keep your write function handlers
   const handleApprove = async (): Promise<void> => {
     if (!stakeAmount || parseFloat(stakeAmount) <= 0) {
       alert("What do you think you're approving");
@@ -97,34 +110,93 @@ export default function Dashboard(): React.JSX.Element {
     }
   };
 
-  // Format helper functions
-  const formatTokenAmount = (amount: bigint | null): string => {
+  // ENHANCED: Format helper functions with Apollo data support
+  const formatTokenAmount = (amount: bigint | string | null): string => {
     if (!amount) return "0";
+
+    if (typeof amount === "string") {
+      // Apollo GraphQL returns string, convert to display format
+      try {
+        return parseFloat(formatEther(BigInt(amount))).toLocaleString(
+          undefined,
+          {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 6,
+          }
+        );
+      } catch {
+        return "0";
+      }
+    }
+
+    // Handle bigint from contract calls
     return parseFloat(formatEther(amount)).toLocaleString(undefined, {
       minimumFractionDigits: 2,
       maximumFractionDigits: 6,
     });
   };
 
-  const formatTimeUntilUnlock = (seconds: bigint | null): string => {
-    if (!seconds || Number(seconds) <= 0) return "Unlocked";
+  const formatTimeUntilUnlock = (unlockTimestamp: string | null): string => {
+    if (!unlockTimestamp) return "No active stakes";
 
-    const totalSeconds = Number(seconds);
-    const days = Math.floor(totalSeconds / 86400);
-    const hours = Math.floor((totalSeconds % 86400) / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const now = Math.floor(Date.now() / 1000);
+    const unlock = parseInt(unlockTimestamp);
+    const seconds = unlock - now;
+
+    if (seconds <= 0) return "Unlocked";
+
+    const days = Math.floor(seconds / 86400);
+    const hours = Math.floor((seconds % 86400) / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
 
     if (days > 0) return `${days}d ${hours}h`;
     if (hours > 0) return `${hours}h ${minutes}m`;
     return `${minutes}m`;
   };
 
-  const formatAPR = (apr: bigint | null): string => {
-    if (!apr) return "Loading...";
-    return `${Number(apr) / 100}%`;
+  const formatAPR = (rate: string | null): string => {
+    if (!rate) return "Loading...";
+    return `${(parseFloat(rate) / 100).toFixed(2)}%`;
+  };
+
+  // NEW: Calculate total pending rewards from positions
+ const calculateTotalPendingRewards = (): string => {
+   if (!positions || positions.length === 0) return "0";
+
+   const total = positions.reduce(
+     (sum: number, position: { pendingRewards: string }) => {
+       const pending = position.pendingRewards || "0";
+       try {
+         // formatEther can handle string directly - no BigInt needed!
+         const etherValue = parseFloat(formatEther(pending));
+         return sum + etherValue;
+       } catch (error) {
+         console.warn(`Error parsing pending rewards: ${pending}`, error);
+         return sum;
+       }
+     },
+     0
+   );
+
+   return total.toString();
+ };
+
+  // NEW: Get next unlock time from active positions
+  const getNextUnlockTime = (): string | null => {
+    if (!positions || positions.length === 0) return null;
+
+    const now = Math.floor(Date.now() / 1000);
+    const futureLocks = positions
+      .map((p: { unlockTimestamp: string }) => parseInt(p.unlockTimestamp))
+      .filter((unlock: number) => unlock > now)
+      .sort((a: number, b: number) => a - b);
+
+    return futureLocks.length > 0 ? futureLocks[0].toString() : null;
   };
 
   // Loading state
+  const isLoading = apolloUserLoading || contractLoading || positionsLoading;
+
   if (isLoading) {
     return (
       <div className="p-6 max-w-4xl mx-auto">
@@ -133,17 +205,13 @@ export default function Dashboard(): React.JSX.Element {
     );
   }
 
-  // Error state
-  if (error) {
-    return (
-      <div className="p-6 max-w-4xl mx-auto">
-        <div className="text-center text-red-600">Error: {error}</div>
-      </div>
-    );
-  }
-
-  const hasStake = userInfo?.stakedAmount && Number(userInfo.stakedAmount) > 0;
-  const hasPendingRewards = pendingRewards && Number(pendingRewards) > 0;
+  // NEW: Enhanced data with Apollo + fallbacks with proper typing
+  const hasStake: boolean = apolloUser?.totalStaked
+    ? parseFloat(apolloUser.totalStaked) > 0
+    : false;
+  const totalPendingRewards: string = calculateTotalPendingRewards();
+  const hasPendingRewards: boolean = parseFloat(totalPendingRewards) > 0;
+  const nextUnlockTime: string | null = getNextUnlockTime();
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
@@ -157,26 +225,68 @@ export default function Dashboard(): React.JSX.Element {
         </Link>
       </div>
 
+      {/* ENHANCED: Protocol stats with Apollo data */}
       <div className="grid grid-cols-3 gap-4 mb-8">
         <div className="p-4 border border-gray-300 rounded">
           <p className="text-sm text-gray-600">Current APR</p>
           <p className="text-xl font-semibold">
-            {formatAPR(currentRewardRate)}
+            {contract ? formatAPR(contract.currentRewardRate) : "Loading..."}
           </p>
         </div>
         <div className="p-4 border border-gray-300 rounded">
-          <p className="text-sm text-gray-600">Total Staked</p>
+          <p className="text-sm text-gray-600">Total Staked (Protocol)</p>
           <p className="text-xl font-semibold">
-            {formatTokenAmount(totalStaked)} TOKENS
+            {contract
+              ? `${formatTokenAmount(contract.totalStaked)} TOKENS`
+              : "Loading..."}
           </p>
         </div>
         <div className="p-4 border border-gray-300 rounded">
-          <p className="text-sm text-gray-600">Initial APR</p>
-          <p className="text-xl font-semibold">{formatAPR(initialApr)}</p>
+          <p className="text-sm text-gray-600">Total Users</p>
+          <p className="text-xl font-semibold">
+            {contract ? contract.totalUsers : "Loading..."}
+          </p>
+        </div>
+      </div>
+
+      {/* NEW: Additional protocol metrics */}
+      <div className="grid grid-cols-4 gap-4 mb-8">
+        <div className="p-3 border border-gray-200 rounded bg-blue-50">
+          <p className="text-sm text-gray-600">Your Active Positions</p>
+          <p className="text-lg font-semibold">{positions?.length || 0}</p>
+        </div>
+        <div className="p-3 border border-gray-200 rounded bg-green-50">
+          <p className="text-sm text-gray-600">Total Rewards Claimed</p>
+          <p className="text-lg font-semibold">
+            {apolloUser
+              ? `${formatTokenAmount(apolloUser.totalRewardsClaimed)}`
+              : "0"}
+          </p>
+        </div>
+        <div className="p-3 border border-gray-200 rounded bg-purple-50">
+          <p className="text-sm text-gray-600">Protocol Status</p>
+          <p
+            className={`text-lg font-semibold ${
+              contract?.isPaused ? "text-red-600" : "text-green-600"
+            }`}
+          >
+            {contract
+              ? contract.isPaused
+                ? "Paused"
+                : "Active"
+              : "Loading..."}
+          </p>
+        </div>
+        <div className="p-3 border border-gray-200 rounded bg-yellow-50">
+          <p className="text-sm text-gray-600">Total Positions</p>
+          <p className="text-lg font-semibold">
+            {contract ? contract.totalStakePositions : "Loading..."}
+          </p>
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-8">
+        {/* EXISTING: Keep your stake interface exactly as is */}
         <div className="p-6 border border-gray-300 rounded">
           <h2 className="text-lg font-semibold mb-4">Stake Tokens</h2>
           <div className="space-y-4">
@@ -209,29 +319,50 @@ export default function Dashboard(): React.JSX.Element {
           </div>
         </div>
 
+        {/* ENHANCED: Position info with Apollo data */}
         <div className="p-6 border border-gray-300 rounded">
           <h2 className="text-lg font-semibold mb-4">Your Position</h2>
           <div className="space-y-3">
             <p>
-              Staked:{" "}
+              Total Staked:{" "}
               <span className="font-semibold">
-                {hasStake
-                  ? `${formatTokenAmount(userInfo.stakedAmount)} TOKENS`
+                {hasStake && apolloUser
+                  ? `${formatTokenAmount(apolloUser.totalStaked)} TOKENS`
                   : "No active stakes"}
               </span>
             </p>
             <p>
               Pending Rewards:{" "}
               <span className="font-semibold text-green-600">
-                {formatTokenAmount(pendingRewards)} TOKENS
+                {totalPendingRewards} TOKENS
               </span>
             </p>
             <p>
-              Unlock in:{" "}
+              Next Unlock:{" "}
               <span className="font-semibold">
-                {formatTimeUntilUnlock(timeUntilUnlock)}
+                {formatTimeUntilUnlock(nextUnlockTime)}
               </span>
             </p>
+
+            {/* NEW: Show individual position details */}
+            {/* {positions && positions.length > 0 && (
+              <div className="mt-4 p-3 bg-gray-50 rounded">
+                <p className="text-sm font-medium mb-2">Position Details:</p>
+                {positions.slice(0, 3).map((position, index: number) => (
+                  <div key={position.id} className="text-xs text-gray-600 mb-1">
+                    Position {index + 1}: {formatTokenAmount(position.amount)}{" "}
+                    TOKENS - {formatTimeUntilUnlock(position.unlockTimestamp)}
+                  </div>
+                ))}
+                {positions.length > 3 && (
+                  <p className="text-xs text-gray-500">
+                    ... and {positions.length - 3} more
+                  </p>
+                )}
+              </div>
+            )} */}
+
+            {/* EXISTING: Keep your action buttons exactly as they are */}
             <div className="space-y-2 pt-2">
               <button
                 onClick={handleClaim}
