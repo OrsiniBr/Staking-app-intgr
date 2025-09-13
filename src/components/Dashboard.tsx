@@ -168,7 +168,7 @@ export default function Dashboard(): React.JSX.Element {
        const pending = position.pendingRewards || "0";
        try {
          // formatEther can handle string directly - no BigInt needed!
-         const etherValue = parseFloat(formatEther(pending));
+         const etherValue = parseFloat(pending);
          return sum + etherValue;
        } catch (error) {
          console.warn(`Error parsing pending rewards: ${pending}`, error);
